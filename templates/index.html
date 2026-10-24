@@ -1,0 +1,1655 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>CAD 弱电点位与网络拓扑存档系统</title>
+<style>
+  :root {
+    --bg-dark: #14171f;
+    --panel-bg: #1e222d;
+    --border: #2e3446;
+    --accent: #3b82f6;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+    background: var(--bg-dark);
+    color: var(--text);
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    user-select: none;
+  }
+  /* 顶部工具栏 */
+  .topbar {
+    height: 54px;
+    background: var(--panel-bg);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 14px;
+    gap: 8px;
+  }
+  .brand { font-weight: 700; font-size: 15px; color: #60a5fa; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .role-tag { font-size: 11px; padding: 2px 8px; border-radius: 99px; font-weight: 600; }
+  .role-tag.admin { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #059669; }
+  .role-tag.guest { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid #d97706; }
+
+  .toolbar-group { display: flex; align-items: center; gap: 6px; flex-wrap: nowrap; }
+  .btn {
+    background: #282e3e;
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+  .btn:hover { background: #343c50; }
+  .btn.active { background: var(--accent); border-color: #60a5fa; color: #fff; font-weight: 600; }
+  .btn.success { background: #059669; border-color: #10b981; color: #fff; }
+  .btn.success:hover { background: #047857; }
+  .btn.primary { background: #2563eb; border-color: #3b82f6; color: #fff; }
+  .btn.primary:hover { background: #1d4ed8; }
+  .btn.warning { background: #d97706; border-color: #f59e0b; color: #fff; }
+  .btn.warning:hover { background: #b45309; }
+  .btn.danger { background: #dc2626; border-color: #ef4444; color: #fff; }
+
+  .scale-input {
+    width: 52px;
+    background: #14171f;
+    border: 1px solid var(--border);
+    color: #fff;
+    border-radius: 4px;
+    padding: 4px 5px;
+    font-size: 12px;
+    text-align: center;
+  }
+
+  /* 主体三栏布局 */
+  .workspace {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+  }
+  .sidebar-left {
+    width: 255px;
+    background: var(--panel-bg);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+  .sidebar-right {
+    width: 300px;
+    background: var(--panel-bg);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+  }
+  .panel-header {
+    padding: 12px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    border-bottom: 1px solid var(--border);
+    color: #93c5fd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .project-list, .device-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px;
+  }
+  .project-item {
+    padding: 10px;
+    border-radius: 6px;
+    border: 1px solid transparent;
+    margin-bottom: 6px;
+    cursor: pointer;
+    background: #171a23;
+  }
+  .project-item:hover { border-color: #3b82f6; }
+  .project-item.active { border-color: #3b82f6; background: #1e293b; }
+  .project-title { font-size: 13px; font-weight: 600; margin-bottom: 4px; display: flex; justify-content: space-between; }
+  .project-meta { font-size: 11px; color: var(--muted); }
+
+  /* 中央画布区 */
+  .canvas-wrap {
+    flex: 1;
+    position: relative;
+    background: #0d1017;
+    overflow: hidden;
+  }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  canvas.crosshair { cursor: crosshair; }
+  .statusbar {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(20, 23, 31, 0.88);
+    border: 1px solid var(--border);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: var(--muted);
+    pointer-events: none;
+  }
+  .layer-bar {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    background: rgba(30, 34, 45, 0.92);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    z-index: 10;
+  }
+  .layer-bar label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+
+  /* 框选打印顶部浮动提示条 */
+  .print-tip-banner {
+    position: absolute;
+    top: 56px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(37, 99, 235, 0.95);
+    color: #fff;
+    padding: 8px 18px;
+    border-radius: 99px;
+    font-size: 13px;
+    font-weight: 600;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.45);
+    display: none;
+    align-items: center;
+    gap: 12px;
+    z-index: 20;
+    border: 1px solid #93c5fd;
+  }
+
+  /* 右侧属性表单 */
+  .prop-box { padding: 12px; border-bottom: 1px solid var(--border); }
+  .form-row { margin-bottom: 10px; }
+  .form-row label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .form-row input, .form-row select {
+    width: 100%;
+    padding: 7px 9px;
+    background: #14171f;
+    border: 1px solid var(--border);
+    color: var(--text);
+    border-radius: 5px;
+    font-size: 13px;
+  }
+  .form-row input:disabled, .form-row select:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+  .device-row {
+    padding: 7px 10px;
+    font-size: 12px;
+    border-radius: 5px;
+    margin-bottom: 4px;
+    background: #161922;
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .device-row:hover { background: #262c3a; }
+  .badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+  .badge.camera { background: rgba(239,68,68,0.2); color: #f87171; }
+  .badge.access { background: rgba(234,179,8,0.2); color: #facc15; }
+  .badge.network { background: rgba(34,197,94,0.2); color: #4ade80; }
+  .badge.text { background: rgba(217,70,239,0.2); color: #e879f9; }
+
+  /* 模态弹窗通用样式 */
+  .modal-mask {
+    position: fixed;
+    inset: 0;
+    background: rgba(9, 11, 17, 0.82);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 999;
+  }
+  .modal-card {
+    background: var(--panel-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    width: 440px;
+    max-width: 92vw;
+    padding: 22px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+  }
+  .modal-title { font-size: 16px; font-weight: 700; color: #93c5fd; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center; }
+  .entry-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+  .entry-tab {
+    flex: 1;
+    text-align: center;
+    padding: 10px;
+    border-radius: 7px;
+    border: 1px solid var(--border);
+    background: #151821;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .entry-tab.active { border-color: #3b82f6; background: rgba(59, 130, 246, 0.18); color: #60a5fa; }
+  .hint-text { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+  /* ==================== 打印专用媒体样式 ==================== */
+  #printArea { display: none; }
+  @media print {
+    @page { margin: 8mm; }
+    body {
+      background: #ffffff !important;
+      height: auto !important;
+      overflow: visible !important;
+    }
+    .topbar, .workspace, .modal-mask {
+      display: none !important;
+    }
+    #printArea {
+      display: flex !important;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      background: #ffffff;
+      color: #000000;
+    }
+    #printHeader {
+      width: 100%;
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      border-bottom: 2px solid #1e293b;
+      padding-bottom: 6px;
+      margin-bottom: 10px;
+      font-family: "Microsoft YaHei", sans-serif;
+    }
+    #printTitle { font-size: 18px; font-weight: 700; color: #0f172a; }
+    #printMeta { font-size: 12px; color: #475569; }
+    #printImage {
+      max-width: 100%;
+      max-height: 86vh;
+      object-fit: contain;
+      border: 1px solid #cbd5e1;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- ==================== 打印专用隐藏容器（仅在弹出打印对话框时展示） ==================== -->
+<div id="printArea">
+  <div id="printHeader">
+    <div id="printTitle">拓扑图打印</div>
+    <div id="printMeta"></div>
+  </div>
+  <img id="printImage" alt="打印预览图" />
+</div>
+
+<!-- ==================== 1. 登录入口弹窗（游客预览入口 / 修改图纸入口） ==================== -->
+<div class="modal-mask" id="authModal" style="display:flex;">
+  <div class="modal-card">
+    <div class="modal-title">
+      <span>🔐 请选择访问入口</span>
+    </div>
+    <div class="entry-tabs">
+      <div class="entry-tab active" id="tabGuest" onclick="switchAuthTab('guest')">👀 游客预览入口</div>
+      <div class="entry-tab" id="tabAdmin" onclick="switchAuthTab('admin')">🛠️ 修改图纸入口</div>
+    </div>
+    <div id="authDesc" style="font-size:12px;color:var(--muted);margin-bottom:12px;">
+      游客预览模式：可查看 CAD 图纸、缩放平移、开关图层、查看清单及框选打印，不可修改或导出源文件。
+    </div>
+    <div class="form-row">
+      <label id="authPwdLabel">请输入游客预览密码</label>
+      <input type="password" id="authPwdInput" placeholder="请输入访问密码" onkeydown="if(event.key==='Enter') submitLogin()">
+    </div>
+    <button class="btn primary" style="width:100%;justify-content:center;padding:9px;font-size:14px;margin-top:6px;" onclick="submitLogin()">
+      进入系统
+    </button>
+  </div>
+</div>
+
+<!-- ==================== 2. 批量生成点位弹窗 ==================== -->
+<div class="modal-mask" id="batchModal">
+  <div class="modal-card">
+    <div class="modal-title">
+      <span>⚡ 批量生成点位（网格平铺）</span>
+      <span style="cursor:pointer;color:var(--muted);" onclick="closeBatchModal()">✕</span>
+    </div>
+    <div class="form-row">
+      <label>设备类型</label>
+      <select id="batchType">
+        <option value="camera">📷 摄像头</option>
+        <option value="access">🖥️ 终端</option>
+        <option value="network">🖧 网络设备</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>生成数量 (1 ~ 200)</label>
+      <input type="number" id="batchCount" min="1" max="200" value="8">
+    </div>
+    <div class="form-row">
+      <label>首个点位名称（自动按序号递增）</label>
+      <input type="text" id="batchStartName" value="CAM-01" placeholder="如 CAM-01 或 1F-TERM-001">
+      <div class="hint-text">支持自动识别末尾数字序号（如 CAM-01 -> CAM-02, CAM-03...）</div>
+    </div>
+    <div class="form-row">
+      <label>首个 IP 地址（选填，不填则留空）</label>
+      <input type="text" id="batchStartIp" placeholder="选填，如 192.168.20.11">
+    </div>
+    <div class="form-row">
+      <label>子网掩码（填写起始 IP 时用于校验网段边界）</label>
+      <input type="text" id="batchMask" value="255.255.255.0" placeholder="如 255.255.255.0 或 /24">
+    </div>
+    <div class="form-row">
+      <label>所属 VLAN / 备注（选填）</label>
+      <input type="text" id="batchVlan" placeholder="如 VLAN20">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn" style="flex:1;justify-content:center;" onclick="closeBatchModal()">取消</button>
+      <button class="btn primary" style="flex:2;justify-content:center;" onclick="confirmBatchGenerate()">立即生成并平铺</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 3. 修改密码弹窗 ==================== -->
+<div class="modal-mask" id="pwdModal">
+  <div class="modal-card">
+    <div class="modal-title">
+      <span>🔑 修改访问密码</span>
+      <span style="cursor:pointer;color:var(--muted);" onclick="closePwdModal()">✕</span>
+    </div>
+    <div class="form-row">
+      <label>当前修改图纸密码（必填验证）</label>
+      <input type="password" id="oldAdminPwd" placeholder="请输入当前修改图纸密码">
+    </div>
+    <div class="form-row">
+      <label>新「游客预览」密码（留空则不修改）</label>
+      <input type="password" id="newGuestPwd" placeholder="设置新的游客预览密码">
+    </div>
+    <div class="form-row">
+      <label>新「修改图纸」密码（留空则不修改）</label>
+      <input type="password" id="newAdminPwd" placeholder="设置新的修改图纸密码">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:14px;">
+      <button class="btn" style="flex:1;justify-content:center;" onclick="closePwdModal()">取消</button>
+      <button class="btn primary" style="flex:2;justify-content:center;" onclick="submitChangePwd()">保存新密码</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== 顶部工具栏 ==================== -->
+<div class="topbar">
+  <div class="brand">
+    <span>📐 CAD 弱电点位与拓扑系统</span>
+    <span id="roleBadge" class="role-tag guest">游客预览</span>
+  </div>
+
+  <!-- 编辑工具组（游客模式下自动隐藏） -->
+  <div class="toolbar-group" id="editToolsGroup">
+    <button class="btn active" data-mode="select" onclick="setMode('select')">🖐️ 选择/移动</button>
+    <button class="btn" data-mode="camera" onclick="setMode('camera')">📷 添加摄像头</button>
+    <button class="btn" data-mode="access" onclick="setMode('access')">🖥️ 添加终端</button>
+    <button class="btn" data-mode="network" onclick="setMode('network')">🖧 添加网络设备</button>
+    <button class="btn" data-mode="link" onclick="setMode('link')">🔗 拓扑连线</button>
+    <button class="btn" data-mode="text" onclick="setMode('text')">🔤 添加文字</button>
+    <button class="btn warning" onclick="openBatchModal()">⚡ 批量生成点位</button>
+  </div>
+
+  <div class="toolbar-group">
+    <label style="font-size:12px;color:var(--muted);">图标比例:</label>
+    <input type="range" id="iconScaleRange" min="0.02" max="2.5" step="0.02" value="0.5" style="width:80px;" oninput="onScaleChange(this.value)">
+    <input type="number" id="iconScaleNum" class="scale-input" min="0.01" max="5.0" step="0.05" value="0.5" oninput="onScaleChange(this.value)">
+    <button class="btn" onclick="fitView()">🔍 适应图纸</button>
+    <!-- 游客和管理员均可使用的框选打印按钮 -->
+    <button class="btn" id="btnPrintArea" data-mode="print_area" onclick="startPrintAreaSelection()">🖨️ 框选打印</button>
+    <button class="btn primary admin-only" onclick="saveProject()">💾 保存存档</button>
+    <button class="btn success admin-only" onclick="exportDXF()">📥 导出 CAD</button>
+    <button class="btn admin-only" onclick="openPwdModal()">🔑 修改密码</button>
+    <button class="btn" onclick="openAuthModal()">🚪 切换入口</button>
+  </div>
+</div>
+
+<!-- ==================== 主工作区 ==================== -->
+<div class="workspace">
+  <!-- 左侧：项目存档与导入 -->
+  <div class="sidebar-left">
+    <div class="panel-header">
+      <span>📁 拓扑存档列表</span>
+      <button class="btn admin-only" style="padding:3px 8px;font-size:11px;" onclick="createDemo()">+ 示例图纸</button>
+    </div>
+    <div class="admin-only" style="padding:10px; border-bottom:1px solid var(--border);" id="uploadBox">
+      <input type="file" id="dxfFileInput" accept=".dxf" style="display:none" onchange="uploadDXF(this)">
+      <button class="btn primary" style="width:100%;justify-content:center;" onclick="document.getElementById('dxfFileInput').click()">
+        📤 导入 CAD 图纸 (.dxf)
+      </button>
+    </div>
+    <div class="project-list" id="projectList"></div>
+  </div>
+
+  <!-- 中间：交互式 CAD 画布 -->
+  <div class="canvas-wrap" id="canvasWrap">
+    <div class="layer-bar">
+      <span style="color:#93c5fd;font-weight:600;">图层显示:</span>
+      <label><input type="checkbox" checked onchange="toggleLayer('cad', this.checked)"> CAD底图</label>
+      <label><input type="checkbox" checked onchange="toggleLayer('camera', this.checked)"> <span style="color:#f87171">●</span>摄像头</label>
+      <label><input type="checkbox" checked onchange="toggleLayer('access', this.checked)"> <span style="color:#facc15">■</span>终端</label>
+      <label><input type="checkbox" checked onchange="toggleLayer('network', this.checked)"> <span style="color:#4ade80">◆</span>网络设备</label>
+      <label><input type="checkbox" checked onchange="toggleLayer('link', this.checked)"> <span style="color:#38bdf8">━</span>拓扑线</label>
+      <label><input type="checkbox" checked onchange="toggleLayer('text', this.checked)"> 文字</label>
+      <label style="border-left:1px solid var(--border);padding-left:10px;color:#fbbf24;font-weight:600;">
+        <input type="checkbox" checked onchange="toggleLayer('ip', this.checked)"> 显示IP地址
+      </label>
+    </div>
+
+    <!-- 框选打印提示横幅 -->
+    <div class="print-tip-banner" id="printTipBanner">
+      <span>🖨️ 请在画布上按住鼠标左键拖拽，框选需要打印的矩形范围（松开后自动弹出打印对话框）</span>
+      <button class="btn danger" style="padding:2px 8px;font-size:11px;" onclick="cancelPrintSelection()">取消 (ESC)</button>
+    </div>
+
+    <canvas id="cadCanvas"></canvas>
+    <div class="statusbar" id="statusBar">请先登录并选择左侧项目存档</div>
+  </div>
+
+  <!-- 右侧：属性编辑与点位清单 -->
+  <div class="sidebar-right">
+    <div class="panel-header">⚙️ 选中对象属性</div>
+    <div class="prop-box" id="propPanel">
+      <div style="color:var(--muted);font-size:12px;">在画布上点击设备或连线即可查看或编辑属性。</div>
+    </div>
+
+    <div class="panel-header">
+      <span>📋 点位与连线清单</span>
+      <span id="totalBadge" style="font-size:11px;color:var(--muted);">0 项</span>
+    </div>
+    <div class="device-list" id="deviceList"></div>
+  </div>
+</div>
+
+<script>
+// ==================== 全局状态 ====================
+let currentRole = null; // 'guest' | 'admin'
+let authTabRole = "guest";
+
+let currentProjectId = null;
+let projectName = "";
+let cadPrimitives = [];
+let cadBounds = { min_x: 0, min_y: 0, max_x: 10000, max_y: 8000, width: 10000, height: 8000 };
+let nodes = [];
+let links = [];
+let iconScale = 0.5;
+
+let mode = "select"; // select, camera, access, network, link, text, print_area
+let selectedItem = null; // { kind: 'node'|'link', obj: ... }
+let linkStartNode = null;
+
+// 框选打印状态
+let isSelectingPrintRect = false;
+let printRectStartScreen = null;
+let printRectEndScreen = null;
+
+// 视图变换状态 (CAD 世界坐标 -> 屏幕像素坐标)
+let view = { offsetX: 0, offsetY: 0, zoom: 0.05 };
+let isDraggingCanvas = false;
+let isDraggingNode = false;
+let dragLastMouse = { x: 0, y: 0 };
+let mouseCadPos = { x: 0, y: 0 };
+
+// 图层开关（打印时同样严格遵循此开关状态）
+let layerVisible = { cad: true, camera: true, access: true, network: true, link: true, text: true, ip: true };
+
+const canvas = document.getElementById("cadCanvas");
+const ctx = canvas.getContext("2d");
+
+// ==================== 1. 权限与登录控制 ====================
+function switchAuthTab(role) {
+  authTabRole = role;
+  document.getElementById("tabGuest").classList.toggle("active", role === "guest");
+  document.getElementById("tabAdmin").classList.toggle("active", role === "admin");
+  const desc = document.getElementById("authDesc");
+  const lbl = document.getElementById("authPwdLabel");
+  if (role === "guest") {
+    desc.textContent = "游客预览模式：可查看 CAD 图纸、缩放平移、开关图层、查看清单及框选打印，不可修改或导出源文件。";
+    lbl.textContent = "请输入游客预览密码（默认 123456）";
+  } else {
+    desc.textContent = "修改图纸模式：拥有完整权限，可导入图纸、添加/批量生成点位、连线、保存存档、框选打印、导出 CAD 及修改密码。";
+    lbl.textContent = "请输入修改图纸密码（默认 admin123）";
+  }
+  document.getElementById("authPwdInput").value = "";
+  document.getElementById("authPwdInput").focus();
+}
+
+function openAuthModal() {
+  document.getElementById("authModal").style.display = "flex";
+  switchAuthTab(currentRole === "admin" ? "guest" : "admin");
+}
+
+async function submitLogin() {
+  const password = document.getElementById("authPwdInput").value;
+  const res = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ role: authTabRole, password })
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.error || "登录失败");
+    return;
+  }
+  applyRoleUI(data.role);
+  document.getElementById("authModal").style.display = "none";
+  await loadProjectList();
+  const listRes = await fetch("/api/projects");
+  const list = await listRes.json();
+  if (list.length > 0 && !currentProjectId) {
+    openProject(list[0].id);
+  }
+}
+
+function applyRoleUI(role) {
+  currentRole = role;
+  const isAdmin = role === "admin";
+  const badge = document.getElementById("roleBadge");
+  badge.textContent = isAdmin ? "🛠️ 修改图纸模式" : "👀 游客只读预览";
+  badge.className = "role-tag " + (isAdmin ? "admin" : "guest");
+
+  setMode("select");
+  document.getElementById("editToolsGroup").style.display = isAdmin ? "flex" : "none";
+  document.querySelectorAll(".admin-only").forEach(el => {
+    el.style.display = isAdmin ? "" : "none";
+  });
+  renderPropPanel();
+  loadProjectList();
+}
+
+function openPwdModal() {
+  document.getElementById("oldAdminPwd").value = "";
+  document.getElementById("newGuestPwd").value = "";
+  document.getElementById("newAdminPwd").value = "";
+  document.getElementById("pwdModal").style.display = "flex";
+}
+
+function closePwdModal() {
+  document.getElementById("pwdModal").style.display = "none";
+}
+
+async function submitChangePwd() {
+  const old_admin_pwd = document.getElementById("oldAdminPwd").value;
+  const new_guest_pwd = document.getElementById("newGuestPwd").value;
+  const new_admin_pwd = document.getElementById("newAdminPwd").value;
+  if (!old_admin_pwd) {
+    alert("请输入当前修改图纸密码以验证身份！");
+    return;
+  }
+  if (!new_guest_pwd && !new_admin_pwd) {
+    alert("请至少填写一项新密码！");
+    return;
+  }
+  const res = await fetch("/api/auth/change_password", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ old_admin_pwd, new_guest_pwd, new_admin_pwd })
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    alert(data.error || "密码修改失败");
+    return;
+  }
+  alert("✅ 密码修改成功！");
+  closePwdModal();
+}
+
+// ==================== 2. IP 工具函数与重复检测 ====================
+function isIpDuplicate(ipStr, excludeUid = null) {
+  const clean = (ipStr || "").trim();
+  if (!clean) return false;
+  return nodes.some(n => n.uid !== excludeUid && (n.ip || "").trim() === clean);
+}
+
+function ipToInt(ip) {
+  const parts = ip.trim().split(".");
+  if (parts.length !== 4) return null;
+  let num = 0;
+  for (const p of parts) {
+    if (!/^\d+$/.test(p)) return null;
+    const v = parseInt(p, 10);
+    if (v < 0 || v > 255) return null;
+    num = (num << 8) + v;
+  }
+  return num >>> 0;
+}
+
+function intToIp(intVal) {
+  return [
+    (intVal >>> 24) & 255,
+    (intVal >>> 16) & 255,
+    (intVal >>> 8) & 255,
+    intVal & 255
+  ].join(".");
+}
+
+function parseSubnetMask(maskStr) {
+  const s = (maskStr || "").trim();
+  if (!s) return 0xffffff00;
+  if (s.startsWith("/")) {
+    const bits = parseInt(s.slice(1), 10);
+    if (isNaN(bits) || bits < 1 || bits > 32) return null;
+    return bits === 0 ? 0 : ((0xffffffff << (32 - bits)) >>> 0);
+  }
+  return ipToInt(s);
+}
+
+// ==================== 3. 批量生成点位（平铺 & IP递增 & 冲突检测） ====================
+function openBatchModal() {
+  if (currentRole !== "admin") return;
+  if (!currentProjectId) {
+    alert("请先打开或导入一张 CAD 图纸！");
+    return;
+  }
+  document.getElementById("batchModal").style.display = "flex";
+}
+
+function closeBatchModal() {
+  document.getElementById("batchModal").style.display = "none";
+}
+
+function generateSequentialName(baseName, indexOffset) {
+  const trimmed = baseName.trim() || "DEV-01";
+  const match = trimmed.match(/^(.*?)(\d+)$/);
+  if (match) {
+    const prefix = match[1];
+    const numStr = match[2];
+    const nextNum = parseInt(numStr, 10) + indexOffset;
+    return prefix + String(nextNum).padStart(numStr.length, "0");
+  }
+  return `${trimmed}-${String(indexOffset + 1).padStart(2, "0")}`;
+}
+
+function confirmBatchGenerate() {
+  const devType = document.getElementById("batchType").value;
+  const count = parseInt(document.getElementById("batchCount").value, 10);
+  const startName = document.getElementById("batchStartName").value.trim();
+  const startIp = document.getElementById("batchStartIp").value.trim();
+  const maskStr = document.getElementById("batchMask").value.trim();
+  const vlanStr = document.getElementById("batchVlan").value.trim();
+
+  if (isNaN(count) || count < 1 || count > 200) {
+    alert("生成数量需在 1 ~ 200 之间！");
+    return;
+  }
+  if (!startName) {
+    alert("请输入首个点位名称！");
+    return;
+  }
+
+  let generatedIps = [];
+  if (startIp) {
+    const baseIpInt = ipToInt(startIp);
+    if (baseIpInt === null) {
+      alert("起始 IP 地址格式不正确（应为如 192.168.20.11）！");
+      return;
+    }
+    const maskInt = parseSubnetMask(maskStr);
+    if (maskInt === null) {
+      alert("子网掩码格式不正确（应为如 255.255.255.0 或 /24）！");
+      return;
+    }
+    const netAddr = (baseIpInt & maskInt) >>> 0;
+    const broadcastAddr = (netAddr | (~maskInt >>> 0)) >>> 0;
+
+    for (let i = 0; i < count; i++) {
+      const curIpInt = (baseIpInt + i) >>> 0;
+      if (maskInt !== 0xffffffff && (curIpInt <= netAddr || curIpInt >= broadcastAddr)) {
+        alert(`❌ IP 生成失败：第 ${i + 1} 个 IP (${intToIp(curIpInt)}) 超出了当前子网掩码 (${maskStr}) 的可用主机范围！已取消本次生成。`);
+        return;
+      }
+      const ipStr = intToIp(curIpInt);
+      if (isIpDuplicate(ipStr)) {
+        alert(`❌ IP 冲突告警：要添加的 IP 地址 【${ipStr}】 在当前图纸中已存在！已取消本次添加。`);
+        return;
+      }
+      generatedIps.push(ipStr);
+    }
+  } else {
+    generatedIps = new Array(count).fill("");
+  }
+
+  const centerCad = screenToCad(canvas.width / 2, canvas.height / 2);
+  const cadR = getBaseCadRadius();
+  const cols = Math.ceil(Math.sqrt(count));
+  const rows = Math.ceil(count / cols);
+  const stepX = Math.max(cadR * 9.5, cadBounds.width * 0.045);
+  const stepY = Math.max(cadR * 6.0, cadBounds.height * 0.045);
+
+  const startX = centerCad.x - ((cols - 1) * stepX) / 2;
+  const startY = centerCad.y + ((rows - 1) * stepY) / 2;
+
+  const baseTimestamp = Date.now();
+  for (let i = 0; i < count; i++) {
+    const r = Math.floor(i / cols);
+    const c = i % cols;
+    const nx = Number((startX + c * stepX).toFixed(2));
+    const ny = Number((startY - r * stepY).toFixed(2));
+
+    nodes.push({
+      uid: `n_${baseTimestamp}_${i}`,
+      type: devType,
+      label: generateSequentialName(startName, i),
+      ip: generatedIps[i],
+      vlan: vlanStr,
+      x: nx,
+      y: ny,
+      angle: 0
+    });
+  }
+
+  closeBatchModal();
+  renderDeviceList();
+  render();
+}
+
+// ==================== 4. 坐标转换与通用场景绘制核心 ====================
+function cadToScreen(cx, cy) {
+  return {
+    x: (cx - view.offsetX) * view.zoom,
+    y: canvas.height - (cy - view.offsetY) * view.zoom
+  };
+}
+
+function screenToCad(sx, sy) {
+  return {
+    x: sx / view.zoom + view.offsetX,
+    y: (canvas.height - sy) / view.zoom + view.offsetY
+  };
+}
+
+function getBaseCadRadius() {
+  const span = Math.max(cadBounds.width, cadBounds.height);
+  return span * 0.0025 * iconScale;
+}
+
+function resizeCanvas() {
+  const wrap = document.getElementById("canvasWrap");
+  canvas.width = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  render();
+}
+window.addEventListener("resize", resizeCanvas);
+
+function fitView() {
+  const pad = 0.86;
+  const zx = (canvas.width * pad) / cadBounds.width;
+  const zy = (canvas.height * pad) / cadBounds.height;
+  view.zoom = Math.min(zx, zy);
+  view.offsetX = cadBounds.min_x - (canvas.width / view.zoom - cadBounds.width) / 2;
+  view.offsetY = cadBounds.min_y - (canvas.height / view.zoom - cadBounds.height) / 2;
+  render();
+}
+
+/**
+ * 通用场景渲染器：既用于主屏幕 Canvas（深色主题），也用于框选打印离屏高清 Canvas（白底打印主题）
+ * 严格遵循 layerVisible 中当前勾选显示的图层与 IP 开关
+ */
+function drawSceneOnContext(targetCtx, targetW, targetH, targetView, isPrintTheme = false) {
+  const toScr = (cx, cy) => ({
+    x: (cx - targetView.offsetX) * targetView.zoom,
+    y: targetH - (cy - targetView.offsetY) * targetView.zoom
+  });
+
+  if (isPrintTheme) {
+    targetCtx.fillStyle = "#ffffff";
+    targetCtx.fillRect(0, 0, targetW, targetH);
+  } else {
+    targetCtx.clearRect(0, 0, targetW, targetH);
+  }
+
+  // 1. 绘制 CAD 原始底图
+  if (layerVisible.cad && cadPrimitives.length > 0) {
+    targetCtx.strokeStyle = isPrintTheme ? "#334155" : "#475569";
+    targetCtx.fillStyle = isPrintTheme ? "#1e293b" : "#64748b";
+    targetCtx.lineWidth = isPrintTheme ? 1.2 : 1;
+
+    for (const item of cadPrimitives) {
+      const p = item.p;
+      if (item.t === "L") {
+        const s1 = toScr(p[0], p[1]);
+        const s2 = toScr(p[2], p[3]);
+        targetCtx.beginPath();
+        targetCtx.moveTo(s1.x, s1.y);
+        targetCtx.lineTo(s2.x, s2.y);
+        targetCtx.stroke();
+      } else if (item.t === "P") {
+        targetCtx.beginPath();
+        for (let i = 0; i < p.length; i += 2) {
+          const pt = toScr(p[i], p[i + 1]);
+          if (i === 0) targetCtx.moveTo(pt.x, pt.y);
+          else targetCtx.lineTo(pt.x, pt.y);
+        }
+        if (item.c) targetCtx.closePath();
+        targetCtx.stroke();
+      } else if (item.t === "C") {
+        const c = toScr(p[0], p[1]);
+        const sr = p[2] * targetView.zoom;
+        targetCtx.beginPath();
+        targetCtx.arc(c.x, c.y, sr, 0, Math.PI * 2);
+        targetCtx.stroke();
+      } else if (item.t === "A") {
+        const c = toScr(p[0], p[1]);
+        const sr = p[2] * targetView.zoom;
+        const sa = -p[4] * Math.PI / 180;
+        const ea = -p[3] * Math.PI / 180;
+        targetCtx.beginPath();
+        targetCtx.arc(c.x, c.y, sr, sa, ea);
+        targetCtx.stroke();
+      } else if (item.t === "T") {
+        const pos = toScr(p[0], p[1]);
+        const maxFont = isPrintTheme ? 42 : 28;
+        const minFont = isPrintTheme ? 12 : 11;
+        const fontPx = Math.max(Math.min(p[2] * targetView.zoom * 1.25, maxFont), minFont);
+        if (fontPx >= minFont) {
+          targetCtx.font = `${fontPx}px "Microsoft YaHei", sans-serif`;
+          targetCtx.fillText(item.s, pos.x, pos.y);
+        }
+      }
+    }
+  }
+
+  const cadR = getBaseCadRadius();
+  const screenR = Math.max(cadR * targetView.zoom, 1.5);
+  const maxLabelFont = isPrintTheme ? 34 : 22;
+  const labelFontSize = Math.min(Math.max(screenR * 1.35, 12), maxLabelFont);
+
+  const nodeMap = {};
+  nodes.forEach(n => nodeMap[n.uid] = n);
+
+  // 2. 绘制拓扑连线
+  if (layerVisible.link) {
+    for (const l of links) {
+      const n1 = nodeMap[l.from_uid];
+      const n2 = nodeMap[l.to_uid];
+      if (!n1 || !n2) continue;
+      const p1 = toScr(n1.x, n1.y);
+      const p2 = toScr(n2.x, n2.y);
+
+      const isSel = !isPrintTheme && selectedItem && selectedItem.kind === "link" && selectedItem.obj.uid === l.uid;
+      targetCtx.save();
+      targetCtx.lineWidth = isSel ? 3 : Math.min(Math.max(screenR * 0.22, 1.4), isPrintTheme ? 3.5 : 2.5);
+      if (l.cable_type === "fiber") {
+        targetCtx.strokeStyle = isPrintTheme ? "#d97706" : "#f59e0b";
+        targetCtx.setLineDash([8, 4]);
+      } else if (l.cable_type === "rvv") {
+        targetCtx.strokeStyle = isPrintTheme ? "#7e22ce" : "#a855f7";
+        targetCtx.setLineDash([3, 3]);
+      } else {
+        targetCtx.strokeStyle = isSel ? "#ffffff" : (isPrintTheme ? "#0284c7" : "#38bdf8");
+      }
+
+      targetCtx.beginPath();
+      targetCtx.moveTo(p1.x, p1.y);
+      targetCtx.lineTo(p2.x, p2.y);
+      targetCtx.stroke();
+      targetCtx.restore();
+
+      if (l.label) {
+        const mx = (p1.x + p2.x) / 2;
+        const my = (p1.y + p2.y) / 2;
+        targetCtx.fillStyle = isPrintTheme ? "#0369a1" : "#38bdf8";
+        targetCtx.font = `${Math.max(labelFontSize * 0.9, 11)}px "Microsoft YaHei", sans-serif`;
+        targetCtx.fillText(l.label, mx + 4, my - 4);
+      }
+    }
+
+    if (!isPrintTheme && mode === "link" && linkStartNode) {
+      const p1 = toScr(linkStartNode.x, linkStartNode.y);
+      const p2 = toScr(mouseCadPos.x, mouseCadPos.y);
+      targetCtx.save();
+      targetCtx.strokeStyle = "#38bdf8";
+      targetCtx.setLineDash([5, 5]);
+      targetCtx.beginPath();
+      targetCtx.moveTo(p1.x, p1.y);
+      targetCtx.lineTo(p2.x, p2.y);
+      targetCtx.stroke();
+      targetCtx.restore();
+    }
+  }
+
+  // 3. 绘制点位与文字标注
+  for (const n of nodes) {
+    if (!layerVisible[n.type]) continue;
+    const pos = toScr(n.x, n.y);
+    const isSel = !isPrintTheme && selectedItem && selectedItem.kind === "node" && selectedItem.obj.uid === n.uid;
+
+    targetCtx.save();
+    if (isSel) {
+      targetCtx.beginPath();
+      targetCtx.arc(pos.x, pos.y, Math.max(screenR * 1.65, 6), 0, Math.PI * 2);
+      targetCtx.strokeStyle = "#ffffff";
+      targetCtx.lineWidth = 1.8;
+      targetCtx.stroke();
+    }
+
+    if (n.type === "camera") {
+      const rad = -n.angle * Math.PI / 180;
+      const spread = 28 * Math.PI / 180;
+      const coneR = screenR * 2.1;
+      targetCtx.beginPath();
+      targetCtx.moveTo(pos.x, pos.y);
+      targetCtx.arc(pos.x, pos.y, coneR, rad - spread, rad + spread);
+      targetCtx.closePath();
+      targetCtx.fillStyle = isPrintTheme ? "rgba(220, 38, 38, 0.22)" : "rgba(239, 68, 68, 0.28)";
+      targetCtx.fill();
+      targetCtx.strokeStyle = isPrintTheme ? "#dc2626" : "#ef4444";
+      targetCtx.lineWidth = Math.min(Math.max(screenR * 0.15, 1), 2.2);
+      targetCtx.stroke();
+
+      targetCtx.beginPath();
+      targetCtx.arc(pos.x, pos.y, screenR * 0.65, 0, Math.PI * 2);
+      targetCtx.fillStyle = isPrintTheme ? "#dc2626" : "#ef4444";
+      targetCtx.fill();
+    } else if (n.type === "access") {
+      const s = screenR * 0.75;
+      targetCtx.fillStyle = isPrintTheme ? "#ca8a04" : "#eab308";
+      targetCtx.fillRect(pos.x - s, pos.y - s, s * 2, s * 2);
+      targetCtx.strokeStyle = isPrintTheme ? "#ffffff" : "#1e222d";
+      targetCtx.lineWidth = Math.min(Math.max(screenR * 0.15, 0.8), 1.5);
+      targetCtx.strokeRect(pos.x - s * 0.6, pos.y - s * 0.6, s * 1.2, s * 1.2);
+    } else if (n.type === "network") {
+      const w = screenR * 1.05, h = screenR * 0.75;
+      targetCtx.fillStyle = isPrintTheme ? "#16a34a" : "#22c55e";
+      targetCtx.fillRect(pos.x - w, pos.y - h, w * 2, h * 2);
+      targetCtx.strokeStyle = isPrintTheme ? "#ffffff" : "#052e16";
+      targetCtx.lineWidth = Math.min(Math.max(screenR * 0.15, 0.8), 1.5);
+      targetCtx.beginPath();
+      targetCtx.moveTo(pos.x - w, pos.y - h); targetCtx.lineTo(pos.x + w, pos.y + h);
+      targetCtx.moveTo(pos.x - w, pos.y + h); targetCtx.lineTo(pos.x + w, pos.y - h);
+      targetCtx.stroke();
+    } else if (n.type === "text") {
+      targetCtx.font = `bold ${Math.max(screenR * 1.4, 14)}px "Microsoft YaHei", sans-serif`;
+      targetCtx.fillStyle = isPrintTheme ? "#9333ea" : "#e879f9";
+      targetCtx.fillText(n.label, pos.x, pos.y);
+      targetCtx.restore();
+      continue;
+    }
+
+    targetCtx.font = `${labelFontSize}px "Microsoft YaHei", sans-serif`;
+    targetCtx.fillStyle = isPrintTheme ? "#0f172a" : "#f8fafc";
+    let tag = n.label;
+    if (layerVisible.ip && n.ip) {
+      tag += ` [${n.ip}]`;
+    }
+    targetCtx.fillText(tag, pos.x + screenR * 1.1, pos.y + labelFontSize * 0.35);
+    targetCtx.restore();
+  }
+}
+
+function render() {
+  drawSceneOnContext(ctx, canvas.width, canvas.height, view, false);
+
+  // 如果正在框选打印范围，绘制半透明选区矩形与边框
+  if (mode === "print_area" && isSelectingPrintRect && printRectStartScreen && printRectEndScreen) {
+    const rx = Math.min(printRectStartScreen.x, printRectEndScreen.x);
+    const ry = Math.min(printRectStartScreen.y, printRectEndScreen.y);
+    const rw = Math.abs(printRectEndScreen.x - printRectStartScreen.x);
+    const rh = Math.abs(printRectEndScreen.y - printRectStartScreen.y);
+
+    ctx.save();
+    // 选区外部暗化遮罩
+    ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+    ctx.fillRect(0, 0, canvas.width, ry);
+    ctx.fillRect(0, ry + rh, canvas.width, canvas.height - (ry + rh));
+    ctx.fillRect(0, ry, rx, rh);
+    ctx.fillRect(rx + rw, ry, canvas.width - (rx + rw), rh);
+
+    // 选区边框与填充
+    ctx.fillStyle = "rgba(59, 130, 246, 0.12)";
+    ctx.fillRect(rx, ry, rw, rh);
+    ctx.strokeStyle = "#60a5fa";
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 4]);
+    ctx.strokeRect(rx, ry, rw, rh);
+
+    ctx.fillStyle = "#93c5fd";
+    ctx.font = `bold 12px "Microsoft YaHei", sans-serif`;
+    ctx.fillText(`🖨️ 打印区域 (${Math.round(rw)} × ${Math.round(rh)} px) - 松开鼠标弹出打印`, rx + 6, Math.max(ry - 8, 16));
+    ctx.restore();
+  }
+
+  updateStatusBar();
+}
+
+// ==================== 5. 框选范围并触发打印核心逻辑 ====================
+function startPrintAreaSelection() {
+  if (!currentProjectId) {
+    alert("请先打开一张图纸再进行打印！");
+    return;
+  }
+  setMode("print_area");
+}
+
+function cancelPrintSelection() {
+  isSelectingPrintRect = false;
+  printRectStartScreen = null;
+  printRectEndScreen = null;
+  setMode("select");
+}
+
+window.addEventListener("keydown", e => {
+  if (e.key === "Escape" && mode === "print_area") {
+    cancelPrintSelection();
+  }
+});
+
+function executePrintByScreenRect(p1Screen, p2Screen) {
+  const cad1 = screenToCad(p1Screen.x, p1Screen.y);
+  const cad2 = screenToCad(p2Screen.x, p2Screen.y);
+
+  const minX = Math.min(cad1.x, cad2.x);
+  const maxX = Math.max(cad1.x, cad2.x);
+  const minY = Math.min(cad1.y, cad2.y);
+  const maxY = Math.max(cad1.y, cad2.y);
+  const cadW = maxX - minX;
+  const cadH = maxY - minY;
+
+  if (cadW <= 0 || cadH <= 0) return;
+
+  // 创建高分辨率离屏 Canvas（长边 2400px，确保打印文字与线条锐利清晰）
+  const maxPrintPx = 2400;
+  const ratio = cadW / cadH;
+  let printW, printH;
+  if (ratio >= 1) {
+    printW = maxPrintPx;
+    printH = Math.max(Math.round(maxPrintPx / ratio), 400);
+  } else {
+    printH = maxPrintPx;
+    printW = Math.max(Math.round(maxPrintPx * ratio), 400);
+  }
+
+  const offCanvas = document.createElement("canvas");
+  offCanvas.width = printW;
+  offCanvas.height = printH;
+  const offCtx = offCanvas.getContext("2d");
+
+  const printView = {
+    offsetX: minX,
+    offsetY: minY,
+    zoom: printW / cadW
+  };
+
+  // 使用白底打印主题重绘所选范围及当前开启的图层
+  drawSceneOnContext(offCtx, printW, printH, printView, true);
+
+  // 设置打印页眉信息
+  const activeLayerNames = [];
+  if (layerVisible.cad) activeLayerNames.push("CAD底图");
+  if (layerVisible.camera) activeLayerNames.push("摄像头");
+  if (layerVisible.access) activeLayerNames.push("终端");
+  if (layerVisible.network) activeLayerNames.push("网络设备");
+  if (layerVisible.link) activeLayerNames.push("拓扑线");
+  if (layerVisible.text) activeLayerNames.push("文字");
+  if (layerVisible.ip) activeLayerNames.push("含IP");
+
+  document.getElementById("printTitle").textContent = projectName || "CAD 拓扑点位图";
+  document.getElementById("printMeta").textContent = `打印图层: ${activeLayerNames.join(" / ")} | 打印时间: ${new Date().toLocaleString()}`;
+
+  const printImg = document.getElementById("printImage");
+  printImg.onload = () => {
+    printImg.onload = null;
+    setTimeout(() => {
+      window.print();
+    }, 80);
+  };
+  printImg.src = offCanvas.toDataURL("image/png");
+}
+
+// ==================== 6. 鼠标交互事件 ====================
+function findHitNode(cadX, cadY) {
+  const hitR = Math.max(getBaseCadRadius() * 1.3, 8 / view.zoom);
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const n = nodes[i];
+    if (!layerVisible[n.type]) continue;
+    if (Math.hypot(n.x - cadX, n.y - cadY) <= hitR) return n;
+  }
+  return null;
+}
+
+function distToSegment(px, py, x1, y1, x2, y2) {
+  const A = px - x1, B = py - y1, C = x2 - x1, D = y2 - y1;
+  const dot = A * C + B * D;
+  const lenSq = C * C + D * D;
+  let param = lenSq !== 0 ? dot / lenSq : -1;
+  let xx, yy;
+  if (param < 0) { xx = x1; yy = y1; }
+  else if (param > 1) { xx = x2; yy = y2; }
+  else { xx = x1 + param * C; yy = y1 + param * D; }
+  return Math.hypot(px - xx, py - yy);
+}
+
+function findHitLink(cadX, cadY) {
+  const tol = Math.max(getBaseCadRadius() * 0.5, 6 / view.zoom);
+  const nodeMap = {};
+  nodes.forEach(n => nodeMap[n.uid] = n);
+  for (const l of links) {
+    const n1 = nodeMap[l.from_uid], n2 = nodeMap[l.to_uid];
+    if (!n1 || !n2) continue;
+    if (distToSegment(cadX, cadY, n1.x, n1.y, n2.x, n2.y) <= tol) return l;
+  }
+  return null;
+}
+
+canvas.addEventListener("mousedown", e => {
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  const cadPt = screenToCad(sx, sy);
+  dragLastMouse = { x: sx, y: sy };
+
+  if (e.button === 2 || e.button === 1) {
+    isDraggingCanvas = true;
+    return;
+  }
+
+  // 框选打印范围模式（游客和管理员均可操作）
+  if (mode === "print_area") {
+    isSelectingPrintRect = true;
+    printRectStartScreen = { x: sx, y: sy };
+    printRectEndScreen = { x: sx, y: sy };
+    render();
+    return;
+  }
+
+  // 游客只读模式下仅允许点击查看属性和拖拽画布
+  if (currentRole !== "admin") {
+    const hitNode = findHitNode(cadPt.x, cadPt.y);
+    if (hitNode) {
+      selectedItem = { kind: "node", obj: hitNode };
+      renderPropPanel();
+      render();
+      return;
+    }
+    const hitLink = findHitLink(cadPt.x, cadPt.y);
+    if (hitLink) {
+      selectedItem = { kind: "link", obj: hitLink };
+      renderPropPanel();
+      render();
+      return;
+    }
+    selectedItem = null;
+    isDraggingCanvas = true;
+    renderPropPanel();
+    render();
+    return;
+  }
+
+  if (mode === "select") {
+    const hitNode = findHitNode(cadPt.x, cadPt.y);
+    if (hitNode) {
+      selectedItem = { kind: "node", obj: hitNode };
+      isDraggingNode = true;
+      renderPropPanel();
+      render();
+      return;
+    }
+    const hitLink = findHitLink(cadPt.x, cadPt.y);
+    if (hitLink) {
+      selectedItem = { kind: "link", obj: hitLink };
+      renderPropPanel();
+      render();
+      return;
+    }
+    selectedItem = null;
+    isDraggingCanvas = true;
+    renderPropPanel();
+    render();
+  } else if (["camera", "access", "network", "text"].includes(mode)) {
+    const typeCount = nodes.filter(n => n.type === mode).length + 1;
+    const defaultNames = {
+      camera: `CAM-${String(typeCount).padStart(2, "0")}`,
+      access: `TERM-${String(typeCount).padStart(2, "0")}`,
+      network: `SW-${String(typeCount).padStart(2, "0")}`,
+      text: "文字备注说明"
+    };
+    let label = defaultNames[mode];
+    if (mode === "text") {
+      const input = prompt("请输入标注文字内容：", "弱电桥架走向说明");
+      if (!input) return;
+      label = input;
+    }
+    const newNode = {
+      uid: "n_" + Date.now() + "_" + Math.floor(Math.random() * 1000),
+      type: mode,
+      label: label,
+      ip: "",
+      vlan: "",
+      x: Number(cadPt.x.toFixed(2)),
+      y: Number(cadPt.y.toFixed(2)),
+      angle: 0
+    };
+    nodes.push(newNode);
+    selectedItem = { kind: "node", obj: newNode };
+    renderPropPanel();
+    renderDeviceList();
+    render();
+  } else if (mode === "link") {
+    const hitNode = findHitNode(cadPt.x, cadPt.y);
+    if (!hitNode) {
+      linkStartNode = null;
+      render();
+      return;
+    }
+    if (!linkStartNode) {
+      linkStartNode = hitNode;
+    } else if (linkStartNode.uid !== hitNode.uid) {
+      const newLink = {
+        uid: "l_" + Date.now(),
+        from_uid: linkStartNode.uid,
+        to_uid: hitNode.uid,
+        cable_type: "cat6",
+        label: ""
+      };
+      links.push(newLink);
+      linkStartNode = null;
+      selectedItem = { kind: "link", obj: newLink };
+      renderPropPanel();
+      renderDeviceList();
+    }
+    render();
+  }
+});
+
+canvas.addEventListener("mousemove", e => {
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  mouseCadPos = screenToCad(sx, sy);
+
+  if (mode === "print_area" && isSelectingPrintRect) {
+    printRectEndScreen = { x: sx, y: sy };
+    render();
+    return;
+  }
+
+  if (currentRole === "admin" && isDraggingNode && selectedItem && selectedItem.kind === "node") {
+    selectedItem.obj.x = Number(mouseCadPos.x.toFixed(2));
+    selectedItem.obj.y = Number(mouseCadPos.y.toFixed(2));
+    render();
+  } else if (isDraggingCanvas) {
+    const dx = sx - dragLastMouse.x;
+    const dy = sy - dragLastMouse.y;
+    view.offsetX -= dx / view.zoom;
+    view.offsetY += dy / view.zoom;
+    dragLastMouse = { x: sx, y: sy };
+    render();
+  } else if (mode === "link" && linkStartNode) {
+    render();
+  } else {
+    updateStatusBar();
+  }
+});
+
+window.addEventListener("mouseup", () => {
+  if (mode === "print_area" && isSelectingPrintRect) {
+    isSelectingPrintRect = false;
+    const p1 = printRectStartScreen;
+    const p2 = printRectEndScreen;
+    printRectStartScreen = null;
+    printRectEndScreen = null;
+
+    if (!p1 || !p2 || Math.abs(p2.x - p1.x) < 15 || Math.abs(p2.y - p1.y) < 15) {
+      alert("框选的矩形范围太小，请按住鼠标左键拖拽出需要打印的矩形区域！");
+      render();
+      return;
+    }
+
+    setMode("select");
+    executePrintByScreenRect(p1, p2);
+    return;
+  }
+
+  isDraggingCanvas = false;
+  isDraggingNode = false;
+});
+
+canvas.addEventListener("contextmenu", e => e.preventDefault());
+
+canvas.addEventListener("wheel", e => {
+  e.preventDefault();
+  const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left, sy = e.clientY - rect.top;
+  const beforeCad = screenToCad(sx, sy);
+  const factor = e.deltaY < 0 ? 1.15 : 0.87;
+  view.zoom = Math.max(Math.min(view.zoom * factor, 50), 0.0001);
+  view.offsetX = beforeCad.x - sx / view.zoom;
+  view.offsetY = beforeCad.y - (canvas.height - sy) / view.zoom;
+  render();
+}, { passive: false });
+
+// ==================== 7. UI 与属性面板 ====================
+function setMode(m) {
+  if (currentRole !== "admin" && m !== "select" && m !== "print_area") return;
+  mode = m;
+  linkStartNode = null;
+  isSelectingPrintRect = false;
+  printRectStartScreen = null;
+  printRectEndScreen = null;
+
+  document.querySelectorAll(".topbar .btn[data-mode]").forEach(b => {
+    b.classList.toggle("active", b.dataset.mode === m);
+  });
+  const banner = document.getElementById("printTipBanner");
+  if (banner) {
+    banner.style.display = m === "print_area" ? "flex" : "none";
+  }
+  canvas.classList.toggle("crosshair", m !== "select");
+  render();
+}
+
+function toggleLayer(layer, checked) {
+  layerVisible[layer] = checked;
+  renderDeviceList();
+  render();
+}
+
+function onScaleChange(val) {
+  const parsed = parseFloat(val);
+  if (isNaN(parsed) || parsed <= 0) return;
+  iconScale = Math.max(parsed, 0.01);
+  document.getElementById("iconScaleRange").value = iconScale;
+  document.getElementById("iconScaleNum").value = iconScale;
+  render();
+}
+
+function updateStatusBar() {
+  const bar = document.getElementById("statusBar");
+  const camCnt = nodes.filter(n => n.type === "camera").length;
+  const accCnt = nodes.filter(n => n.type === "access").length;
+  const netCnt = nodes.filter(n => n.type === "network").length;
+  bar.textContent = `CAD坐标: X=${mouseCadPos.x.toFixed(1)}, Y=${mouseCadPos.y.toFixed(1)} | 图标比例:${iconScale} | 摄像头:${camCnt}  终端:${accCnt}  网络设备:${netCnt}  连线:${links.length}`;
+}
+
+function renderPropPanel() {
+  const box = document.getElementById("propPanel");
+  if (!selectedItem) {
+    box.innerHTML = `<div style="color:var(--muted);font-size:12px;">未选中任何对象。点击画布上的点位或拓扑线即可查看属性。</div>`;
+    return;
+  }
+
+  const disabledAttr = currentRole === "admin" ? "" : "disabled";
+
+  if (selectedItem.kind === "node") {
+    const n = selectedItem.obj;
+    box.innerHTML = `
+      <div class="form-row">
+        <label>点位名称 / 文字内容</label>
+        <input type="text" value="${n.label}" ${disabledAttr} oninput="updateNodeProp('label', this.value)">
+      </div>
+      ${n.type !== "text" ? `
+      <div class="form-row">
+        <label>IP 地址（自动检测重复）</label>
+        <input type="text" value="${n.ip || ''}" ${disabledAttr} placeholder="如 192.168.20.11" onchange="updateNodeIpWithCheck(this)">
+      </div>
+      <div class="form-row">
+        <label>所属 VLAN / 备注</label>
+        <input type="text" value="${n.vlan || ''}" ${disabledAttr} placeholder="如 VLAN20" oninput="updateNodeProp('vlan', this.value)">
+      </div>` : ""}
+      ${n.type === "camera" ? `
+      <div class="form-row">
+        <label>摄像头朝向角度 (${n.angle}°)</label>
+        <input type="range" min="0" max="360" value="${n.angle || 0}" ${disabledAttr} oninput="updateNodeProp('angle', this.value); this.previousElementSibling.textContent='摄像头朝向角度 ('+this.value+'°)'">
+      </div>` : ""}
+      <div class="form-row" style="font-size:11px;color:var(--muted);">
+        CAD 坐标: (${n.x}, ${n.y})
+      </div>
+      ${currentRole === "admin" ? `<button class="btn danger" style="width:100%;justify-content:center;" onclick="deleteSelected()">🗑️ 删除该点位</button>` : ""}
+    `;
+  } else if (selectedItem.kind === "link") {
+    const l = selectedItem.obj;
+    const n1 = nodes.find(n => n.uid === l.from_uid);
+    const n2 = nodes.find(n => n.uid === l.to_uid);
+    const dist = (n1 && n2) ? Math.hypot(n1.x - n2.x, n1.y - n2.y).toFixed(0) : 0;
+    box.innerHTML = `
+      <div class="form-row">
+        <label>线缆类型</label>
+        <select ${disabledAttr} onchange="updateLinkProp('cable_type', this.value)">
+          <option value="cat6" ${l.cable_type === 'cat6' ? 'selected' : ''}>六类网线 (Cat6/POE)</option>
+          <option value="fiber" ${l.cable_type === 'fiber' ? 'selected' : ''}>单/多模光纤 (Fiber)</option>
+          <option value="rvv" ${l.cable_type === 'rvv' ? 'selected' : ''}>电源/控制线 (RVV)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>连线标注（默认无标注）</label>
+        <input type="text" value="${l.label || ''}" ${disabledAttr} placeholder="选填，如 光纤主干" oninput="updateLinkProp('label', this.value)">
+      </div>
+      <div class="form-row" style="font-size:11px;color:var(--muted);">
+        CAD 直线跨度: 约 ${dist} (图纸单位)
+      </div>
+      ${currentRole === "admin" ? `<button class="btn danger" style="width:100%;justify-content:center;" onclick="deleteSelected()">🗑️ 删除该连线</button>` : ""}
+    `;
+  }
+}
+
+function updateNodeIpWithCheck(inputEl) {
+  if (currentRole !== "admin" || !selectedItem || selectedItem.kind !== "node") return;
+  const newIp = inputEl.value.trim();
+  const curNode = selectedItem.obj;
+
+  if (newIp && isIpDuplicate(newIp, curNode.uid)) {
+    alert(`❌ IP 冲突告警：IP 地址 【${newIp}】 在当前图纸中已存在！已取消本次修改。`);
+    inputEl.value = curNode.ip || "";
+    return;
+  }
+  curNode.ip = newIp;
+  renderDeviceList();
+  render();
+}
+
+function updateNodeProp(key, val) {
+  if (currentRole !== "admin" || !selectedItem || selectedItem.kind !== "node") return;
+  selectedItem.obj[key] = key === "angle" ? parseFloat(val) : val;
+  renderDeviceList();
+  render();
+}
+
+function updateLinkProp(key, val) {
+  if (currentRole !== "admin" || !selectedItem || selectedItem.kind !== "link") return;
+  selectedItem.obj[key] = val;
+  renderDeviceList();
+  render();
+}
+
+function deleteSelected() {
+  if (currentRole !== "admin" || !selectedItem) return;
+  if (selectedItem.kind === "node") {
+    const uid = selectedItem.obj.uid;
+    nodes = nodes.filter(n => n.uid !== uid);
+    links = links.filter(l => l.from_uid !== uid && l.to_uid !== uid);
+  } else {
+    const uid = selectedItem.obj.uid;
+    links = links.filter(l => l.uid !== uid);
+  }
+  selectedItem = null;
+  renderPropPanel();
+  renderDeviceList();
+  render();
+}
+
+function renderDeviceList() {
+  const listEl = document.getElementById("deviceList");
+  document.getElementById("totalBadge").textContent = `${nodes.length} 点位 / ${links.length} 线`;
+  const typeLabels = { camera: "监控", access: "终端", network: "网络", text: "文字" };
+
+  listEl.innerHTML = nodes.map(n => `
+    <div class="device-row" onclick="focusNode('${n.uid}')">
+      <span><span class="badge ${n.type}">${typeLabels[n.type]}</span> ${n.label}</span>
+      <span style="color:var(--muted);font-size:11px;">${layerVisible.ip ? (n.ip || '') : ''}</span>
+    </div>
+  `).join("");
+}
+
+function focusNode(uid) {
+  const n = nodes.find(item => item.uid === uid);
+  if (!n) return;
+  selectedItem = { kind: "node", obj: n };
+  view.offsetX = n.x - (canvas.width / 2) / view.zoom;
+  view.offsetY = n.y - (canvas.height / 2) / view.zoom;
+  renderPropPanel();
+  render();
+}
+
+// ==================== 8. 后端 API 通信 ====================
+async function loadProjectList() {
+  if (!currentRole) return;
+  const res = await fetch("/api/projects");
+  if (!res.ok) return;
+  const list = await res.json();
+  const container = document.getElementById("projectList");
+
+  if (list.length === 0) {
+    container.innerHTML = `<div style="padding:12px;color:var(--muted);font-size:12px;">暂无存档，请切换至修改图纸入口并点击「+ 示例图纸」或上传 .dxf 文件。</div>`;
+    return;
+  }
+
+  container.innerHTML = list.map(p => `
+    <div class="project-item ${p.id === currentProjectId ? 'active' : ''}" onclick="openProject(${p.id})">
+      <div class="project-title">
+        <span>${p.name}</span>
+        ${currentRole === 'admin' ? `<span style="color:#ef4444;font-size:11px;" onclick="event.stopPropagation();deleteProject(${p.id})">删除</span>` : ''}
+      </div>
+      <div class="project-meta">点位: ${p.node_count} | 连线: ${p.link_count}</div>
+      <div class="project-meta">更新: ${p.updated_at}</div>
+    </div>
+  `).join("");
+}
+
+async function openProject(pid) {
+  const res = await fetch(`/api/projects/${pid}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  currentProjectId = data.project.id;
+  projectName = data.project.name;
+  cadPrimitives = data.cad_primitives;
+  cadBounds = data.bounds;
+  nodes = data.nodes;
+  links = data.links;
+  iconScale = data.project.icon_scale || 0.5;
+  document.getElementById("iconScaleRange").value = iconScale;
+  document.getElementById("iconScaleNum").value = iconScale;
+  selectedItem = null;
+
+  loadProjectList();
+  renderPropPanel();
+  renderDeviceList();
+  fitView();
+}
+
+async function createDemo() {
+  const res = await fetch("/api/projects/demo", { method: "POST" });
+  const data = await res.json();
+  if (!res.ok) { alert(data.error || "操作失败"); return; }
+  await openProject(data.id);
+}
+
+async function uploadDXF(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const name = prompt("请输入该图纸项目的存档名称：", file.name.replace(/\.dxf$/i, ""));
+  if (name === null) { input.value = ""; return; }
+
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("name", name);
+
+  const res = await fetch("/api/projects/upload", { method: "POST", body: fd });
+  const data = await res.json();
+  input.value = "";
+  if (!res.ok || data.error) {
+    alert(data.error || "上传失败");
+    return;
+  }
+  await openProject(data.id);
+}
+
+async function saveProject() {
+  if (!currentProjectId) { alert("请先选择或创建一个项目！"); return; }
+  const res = await fetch(`/api/projects/${currentProjectId}/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: projectName, icon_scale: iconScale, nodes, links })
+  });
+  const data = await res.json();
+  if (res.ok) {
+    loadProjectList();
+    alert("✅ 拓扑图已成功保存至 SQLite 数据库！");
+  } else {
+    alert(data.error || "保存失败");
+  }
+}
+
+async function exportDXF() {
+  if (!currentProjectId) { alert("请先打开一个项目！"); return; }
+  const saveRes = await fetch(`/api/projects/${currentProjectId}/save`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name: projectName, icon_scale: iconScale, nodes, links })
+  });
+  if (!saveRes.ok) {
+    const err = await saveRes.json();
+    alert(err.error || "保存校验未通过，无法导出");
+    return;
+  }
+  const showIpFlag = layerVisible.ip ? "1" : "0";
+  const visibleLayers = ["cad", "camera", "access", "network", "link", "text"]
+    .filter(layer => layerVisible[layer]).join(",");
+  window.location.href = `/api/projects/${currentProjectId}/export_dxf?show_ip=${showIpFlag}&layers=${encodeURIComponent(visibleLayers)}`;
+}
+
+async function deleteProject(pid) {
+  if (!confirm("确定要删除该拓扑存档吗？")) return;
+  await fetch(`/api/projects/${pid}`, { method: "DELETE" });
+  if (currentProjectId === pid) {
+    currentProjectId = null;
+    cadPrimitives = [];
+    nodes = [];
+    links = [];
+    render();
+  }
+  loadProjectList();
+}
+
+// 启动初始化：检查登录状态
+resizeCanvas();
+(async function initApp() {
+  const res = await fetch("/api/auth/status");
+  const data = await res.json();
+  if (data.role === "guest" || data.role === "admin") {
+    applyRoleUI(data.role);
+    document.getElementById("authModal").style.display = "none";
+    await loadProjectList();
+    const listRes = await fetch("/api/projects");
+    const list = await listRes.json();
+    if (list.length > 0) openProject(list[0].id);
+  } else {
+    document.getElementById("authModal").style.display = "flex";
+    switchAuthTab("guest");
+  }
+})();
+</script>
+</body>
+</html>
