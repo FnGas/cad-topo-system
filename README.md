@@ -38,9 +38,6 @@
 在项目根目录执行：
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
 pip install Flask ezdxf
 ```
 
